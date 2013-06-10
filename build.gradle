@@ -1,0 +1,30 @@
+
+repositories {
+
+	mavenLocal()
+	mavenCentral()
+
+}
+
+apply plugin: 'eclipse'
+apply plugin: 'groovy'
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+version = '1.0'
+def env = System.getenv()
+
+dependencies {
+	final SPOCK_VERSION = '0.7-groovy-2.0'
+	final GROOVY_VERSION= '2.1.3'
+	
+	compile "org.codehaus.groovy:groovy-all:$GROOVY_VERSION:indy"
+  
+	testCompile "org.spockframework:spock-core:$SPOCK_VERSION"
+	
+	compile 'org.tmatesoft.svnkit:svnkit:1.7.8'
+	compile 'org.tmatesoft.svnkit:svnkit-cli:1.7.8'
+
+}
+
+task wrapper(type: Wrapper) { gradleVersion = '1.6' }
