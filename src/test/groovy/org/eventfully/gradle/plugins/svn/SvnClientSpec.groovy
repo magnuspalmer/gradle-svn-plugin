@@ -7,6 +7,8 @@ import org.tmatesoft.svn.core.SVNCommitInfo;
 import org.tmatesoft.svn.core.SVNDepth
 import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
+import org.tmatesoft.svn.core.SVNProperties;
+import org.tmatesoft.svn.core.SVNRevisionProperty;
 import org.tmatesoft.svn.core.SVNURL
 import org.tmatesoft.svn.core.auth.ISVNAuthenticationManager
 import org.tmatesoft.svn.core.internal.io.dav.DAVRepositoryFactory
@@ -15,10 +17,13 @@ import org.tmatesoft.svn.core.internal.io.svn.SVNRepositoryFactoryImpl
 import org.tmatesoft.svn.core.wc.ISVNOptions
 import org.tmatesoft.svn.core.wc.SVNClientManager
 import org.tmatesoft.svn.core.wc.SVNCommitClient;
+import org.tmatesoft.svn.core.wc.SVNCopyClient;
+import org.tmatesoft.svn.core.wc.SVNCopySource;
 import org.tmatesoft.svn.core.wc.SVNLogClient;
 import org.tmatesoft.svn.core.wc.SVNRevision
 import org.tmatesoft.svn.core.wc.SVNUpdateClient
 import org.tmatesoft.svn.core.wc.SVNWCUtil
+import org.tmatesoft.svn.core.wc2.SvnCopySource;
 
 import spock.lang.*
 import wslite.soap.*
@@ -29,7 +34,6 @@ class SvnClientSpec extends Specification {
 
 	def baseUrl = ""
 	File exportDir = new File("C:/exports/INT001_Videos")
-	File mqsiCreateBarExe = new File("C:/opt/IBM/WMBT800/mqsicreatebar.exe")
 	String url
 	SVNClientManager clientManager
 	SVNURL svnUrlBase
@@ -58,13 +62,7 @@ class SvnClientSpec extends Specification {
 		svnUrlBase = new SVNURL(url, uriEncoded)
 		svnUrlTrunk = svnUrlBase.appendPath('trunk', uriEncoded)
 		svnUrlDeploy = svnUrlBase.appendPath('deploy', uriEncoded)
-		svnUrlDeploy = svnUrlBase.appendPath('tags', uriEncoded)
-	}
-
-	def "Check that mqsicreatebar exists and is executable"(){
-
-		expect: "mqsicreatebar is executable"
-		mqsiCreateBarExe.canExecute()
+		svnUrlTags = svnUrlBase.appendPath('tags', uriEncoded)
 	}
 
 	def "SVN list "() {
@@ -92,6 +90,26 @@ class SvnClientSpec extends Specification {
 		then: "It has a deploydir"
 		assert handler.deployDir
 	}
+
+	@Unroll
+	def "SVN list deploydir using search: #searchString"() {
+
+		given: "A logClient"
+		SVNLogClient logClient = clientManager.getLogClient()
+		def handler = new VerifyDirExistISVNDirEntryHandler(search: searchString, )
+
+		when: "listing the repo url"
+		logClient.doList(svnUrlBase, SVNRevision.HEAD, SVNRevision.HEAD, false, SVNDepth.IMMEDIATES, 0, handler)
+
+		then: "It has a deploydir"
+		assert handler.found == expected
+
+		where:
+		searchString | expected
+		'deploy' | true
+		'nodeploy' | false
+	}
+
 
 	def "SVN create dir"(){
 
@@ -135,6 +153,48 @@ class SvnClientSpec extends Specification {
 		then: "It gets exported"
 		assert exportDir.exists()
 	}
+
+	def "SVN create tag (by copy)"() {
+
+		given: "A copyClient"
+		SVNCopyClient copyClient = clientManager.getCopyClient()
+
+		and: "a version"
+		String version = "1.0"
+
+		and: "the source and destination urls for copy"
+		SVNCopySource[] source = [
+			new SVNCopySource(SVNRevision.HEAD, SVNRevision.HEAD, svnUrlTrunk)
+		]
+		SVNURL tag = svnUrlTags.appendPath(version, uriEncoded)
+
+		and: "some other options"
+		boolean doNotMove = false
+		boolean doNotCreateParentIfMissing = false
+		boolean failOnExistingVersionTag = true
+
+		when: "the tag is created"
+		def revision = copyClient.doCopy(source, tag, doNotMove, doNotCreateParentIfMissing, failOnExistingVersionTag, "Creating tag: $version", null)
+
+		then: "It gets copied successfully"
+		assert revision.newRevision > 0
+	}
+
+	def "SVN delete created tag"(){
+
+		given: "A commitClient"
+		SVNCommitClient commitClient = clientManager.getCommitClient()
+		SVNURL tag = svnUrlTags.appendPath(version, uriEncoded)
+		
+		and: "a version"
+		String version = "1.0"
+
+		when: "I delete the tag"
+		SVNCommitInfo revision = commitClient.doDelete([tag] as SVNURL[], "Deleting tag for $version")
+
+		then: "The revision is greater than zero"
+		revision.getNewRevision() > "0"
+	}
 }
 
 class MyISVNDirEntryHandler implements ISVNDirEntryHandler {
@@ -156,11 +216,26 @@ class VerifyDeployDirExistISVNDirEntryHandler implements ISVNDirEntryHandler {
 	@Override
 	public void handleDirEntry(SVNDirEntry dirEntry) throws SVNException {
 
-		println "dep" + dirEntry.name
 		if (dirEntry.name == 'deploy'){
-			println "yes!"
 			deployEntry = dirEntry
 			deployDir = true
 		}
 	}
 }
+
+class VerifyDirExistISVNDirEntryHandler implements ISVNDirEntryHandler {
+
+	String search
+	def entry
+	boolean found
+
+	@Override
+	public void handleDirEntry(SVNDirEntry dirEntry) throws SVNException {
+
+		if (dirEntry.name =~ search ){
+			entry = dirEntry
+			found = true
+		}
+	}
+}
+
