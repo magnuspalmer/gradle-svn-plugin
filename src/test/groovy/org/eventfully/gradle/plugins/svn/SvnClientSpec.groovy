@@ -224,15 +224,28 @@ class SvnClientSpec extends Specification {
 		
 	}
 	
-	@Ignore
 	def "SVN add file(s)"() {
 		
 		given: "A working copy client"
 		SVNWCClient client = clientManager.getWCClient()
 		
 		and: "A file to add"
-		File fileToAdd = File.createTempFile(url, url)
+		File checkoutSubDir = new File(checkoutDir, "temp")
+		checkoutSubDir.mkdir()
+		File fileToAdd = File.createTempFile("prefix", "suffix", checkoutSubDir  )
 		
+		and: "Some options"
+		boolean noErrorsOnExistingFiles = true
+		boolean makeDir = false
+		boolean notUsed = false
+		boolean dontIncludeIgnored = false
+		boolean makeParents = true
+		
+		when: "adding a file"
+		client.doAdd(fileToAdd, noErrorsOnExistingFiles, makeDir, notUsed, SVNDepth.INFINITY, dontIncludeIgnored, makeParents)
+		
+		then: "the file is added"
+		assert true
 		
 	} 
 }
