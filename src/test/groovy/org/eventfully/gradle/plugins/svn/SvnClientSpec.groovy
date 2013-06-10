@@ -22,6 +22,7 @@ import org.tmatesoft.svn.core.wc.SVNCopySource;
 import org.tmatesoft.svn.core.wc.SVNLogClient;
 import org.tmatesoft.svn.core.wc.SVNRevision
 import org.tmatesoft.svn.core.wc.SVNUpdateClient
+import org.tmatesoft.svn.core.wc.SVNWCClient;
 import org.tmatesoft.svn.core.wc.SVNWCUtil
 import org.tmatesoft.svn.core.wc2.SvnCopySource;
 
@@ -34,12 +35,15 @@ class SvnClientSpec extends Specification {
 
 	def baseUrl = ""
 	File exportDir = new File("C:/exports/INT001_Videos")
+	String INT_ID = 'INT001'
 	String url
+	String integrationsUrl
 	SVNClientManager clientManager
 	SVNURL svnUrlBase
 	SVNURL svnUrlTrunk
 	SVNURL svnUrlDeploy
 	SVNURL svnUrlTags
+	SVNURL svnUrlIntegrations
 	boolean uriEncoded = false
 
 	@BeforeClass
@@ -52,6 +56,7 @@ class SvnClientSpec extends Specification {
 			exportDir.deleteDir();
 		}
 		url = "https://MALL19927.lik.enfonet.fi:8443/svn/acme/integrations/INT001_Videos"
+		integrationsUrl = "https://MALL19927.lik.enfonet.fi:8443/svn/acme/integrations"
 		String name="builder";
 		String password="builder1";
 
@@ -63,19 +68,22 @@ class SvnClientSpec extends Specification {
 		svnUrlTrunk = svnUrlBase.appendPath('trunk', uriEncoded)
 		svnUrlDeploy = svnUrlBase.appendPath('deploy', uriEncoded)
 		svnUrlTags = svnUrlBase.appendPath('tags', uriEncoded)
+		svnUrlIntegrations = new SVNURL(integrationsUrl, uriEncoded)
 	}
 
-	def "SVN list "() {
+	def "SVN list intId"() {
 
 		given: "A logClient"
 		SVNLogClient logClient = clientManager.getLogClient()
-		def handler = new MyISVNDirEntryHandler()
+		def handler = new VerifyDirExistISVNDirEntryHandler(search: INT_ID, )
 
 		when: "listing the repo url"
-		logClient.doList(svnUrlTrunk, SVNRevision.HEAD, SVNRevision.HEAD, false, SVNDepth.IMMEDIATES, 0, handler)
+		logClient.doList(svnUrlIntegrations, SVNRevision.HEAD, SVNRevision.HEAD, false, SVNDepth.IMMEDIATES, 0, handler)
 
 		then: "it looks like expected"
-		assert handler.dirEntries*.name == ['', 'docs', 'src', 'test']
+		handler.found
+		assert handler.entry.getURL() == svnUrlBase
+//		assert handler.dirEntries*.name == ['', 'docs', 'src', 'test']
 	}
 
 	def "SVN list deploydir "() {
@@ -174,7 +182,8 @@ class SvnClientSpec extends Specification {
 		boolean failOnExistingVersionTag = true
 
 		when: "the tag is created"
-		def revision = copyClient.doCopy(source, tag, doNotMove, doNotCreateParentIfMissing, failOnExistingVersionTag, "Creating tag: $version", null)
+		def revision = copyClient.doCopy(source, tag, doNotMove, doNotCreateParentIfMissing,
+				failOnExistingVersionTag, "Creating tag: $version", null)
 
 		then: "It gets copied successfully"
 		assert revision.newRevision > 0
@@ -185,7 +194,7 @@ class SvnClientSpec extends Specification {
 		given: "A commitClient"
 		SVNCommitClient commitClient = clientManager.getCommitClient()
 		SVNURL tag = svnUrlTags.appendPath(version, uriEncoded)
-		
+
 		and: "a version"
 		String version = "1.0"
 
@@ -195,6 +204,34 @@ class SvnClientSpec extends Specification {
 		then: "The revision is greater than zero"
 		revision.getNewRevision() > "0"
 	}
+	
+	def "SVN checkout trunk"() {
+		
+		given: "A checkout client"
+		SVNUpdateClient client = clientManager.getUpdateClient()
+		
+		and: "A directory to checkout to"
+		File checkoutDir = new File("target")
+		
+		when: "checking out trunk"
+		client.doCheckout(svnUrlTrunk, checkoutDir, SVNRevision.HEAD, SVNRevision.HEAD, SVNDepth.INFINITY, true)
+		
+		then: "trunk is checked out as a local working copy"
+		assert checkoutDir.exists()
+		
+	}
+	
+	@Ignore
+	def "SVN add file(s)"() {
+		
+		given: "A working copy client"
+		SVNWCClient client = clientManager.getWCClient()
+		
+		and: "A file to add"
+		File fileToAdd = File.createTempFile(url, url)
+		
+		
+	} 
 }
 
 class MyISVNDirEntryHandler implements ISVNDirEntryHandler {
@@ -226,7 +263,7 @@ class VerifyDeployDirExistISVNDirEntryHandler implements ISVNDirEntryHandler {
 class VerifyDirExistISVNDirEntryHandler implements ISVNDirEntryHandler {
 
 	String search
-	def entry
+	SVNDirEntry entry
 	boolean found
 
 	@Override
