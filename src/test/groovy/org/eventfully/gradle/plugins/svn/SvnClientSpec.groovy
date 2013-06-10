@@ -14,6 +14,7 @@ import org.tmatesoft.svn.core.auth.ISVNAuthenticationManager
 import org.tmatesoft.svn.core.internal.io.dav.DAVRepositoryFactory
 import org.tmatesoft.svn.core.internal.io.fs.FSRepositoryFactory
 import org.tmatesoft.svn.core.internal.io.svn.SVNRepositoryFactoryImpl
+import org.tmatesoft.svn.core.internal.util.SVNURLUtil;
 import org.tmatesoft.svn.core.wc.ISVNOptions
 import org.tmatesoft.svn.core.wc.SVNClientManager
 import org.tmatesoft.svn.core.wc.SVNCommitClient;
@@ -45,6 +46,8 @@ class SvnClientSpec extends Specification {
 	SVNURL svnUrlTags
 	SVNURL svnUrlIntegrations
 	boolean uriEncoded = false
+	String svnProjectName
+	File checkoutDir
 
 	@BeforeClass
 	public static void initTestData(){
@@ -57,6 +60,7 @@ class SvnClientSpec extends Specification {
 		}
 		url = "https://MALL19927.lik.enfonet.fi:8443/svn/acme/integrations/INT001_Videos"
 		integrationsUrl = "https://MALL19927.lik.enfonet.fi:8443/svn/acme/integrations"
+		svnProjectName = 'INT001_Videos'
 		String name="builder";
 		String password="builder1";
 
@@ -69,6 +73,8 @@ class SvnClientSpec extends Specification {
 		svnUrlDeploy = svnUrlBase.appendPath('deploy', uriEncoded)
 		svnUrlTags = svnUrlBase.appendPath('tags', uriEncoded)
 		svnUrlIntegrations = new SVNURL(integrationsUrl, uriEncoded)
+		
+		checkoutDir = new File("target" + File.separator + svnProjectName)
 	}
 
 	def "SVN list intId"() {
@@ -80,10 +86,9 @@ class SvnClientSpec extends Specification {
 		when: "listing the repo url"
 		logClient.doList(svnUrlIntegrations, SVNRevision.HEAD, SVNRevision.HEAD, false, SVNDepth.IMMEDIATES, 0, handler)
 
-		then: "it looks like expected"
+		then: "The entry for the intid is found"
 		handler.found
-		assert handler.entry.getURL() == svnUrlBase
-//		assert handler.dirEntries*.name == ['', 'docs', 'src', 'test']
+		handler.entry.getURL() == svnUrlBase
 	}
 
 	def "SVN list deploydir "() {
@@ -167,8 +172,7 @@ class SvnClientSpec extends Specification {
 		given: "A copyClient"
 		SVNCopyClient copyClient = clientManager.getCopyClient()
 
-		and: "a version"
-		String version = "1.0"
+		and: "the version"
 
 		and: "the source and destination urls for copy"
 		SVNCopySource[] source = [
@@ -211,13 +215,12 @@ class SvnClientSpec extends Specification {
 		SVNUpdateClient client = clientManager.getUpdateClient()
 		
 		and: "A directory to checkout to"
-		File checkoutDir = new File("target")
 		
 		when: "checking out trunk"
 		client.doCheckout(svnUrlTrunk, checkoutDir, SVNRevision.HEAD, SVNRevision.HEAD, SVNDepth.INFINITY, true)
 		
 		then: "trunk is checked out as a local working copy"
-		assert checkoutDir.exists()
+		checkoutDir.exists()
 		
 	}
 	
